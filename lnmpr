@@ -1,0 +1,554 @@
+#!/bin/bash
+
+# NGINX、PHP、MYSQL、REDIS一键安装脚本，Mysql默认无密码，下载地址到期到相应官网获取,如下
+# nginx: http://nginx.org/en/download.html
+# php: http://php.net/get/php-7.2.7.tar.gz/from/a/mirror
+# redis: https://redis.io/download
+# redis_ext: https://pecl.php.net/package/redis
+# mysql(rpm): https://dev.mysql.com/downloads/repo/yum/
+# author 空城 QQ694623056
+# date 2018-07-05
+
+# 包地址,Mysql为RPM源
+nginx_url='http://nginx.org/download/nginx-1.15.0.tar.gz'
+php_url='http://br2.php.net/get/php-7.2.7.tar.gz/from/this/mirror'
+mysql_url='https://dev.mysql.com/get/mysql80-community-release-el7-1.noarch.rpm'
+redis_url='https://github.com/antirez/redis/archive/5.0-rc3.tar.gz'
+redis_ext_url='https://pecl.php.net/get/redis-4.1.0RC3.tgz'
+
+# 安装地址
+prefix='/www/server'
+
+# 添加用户
+adduser www
+
+# 安装依赖
+yum install -y wget make gcc g++ gcc-c++ libtool autoconf automake imake libxml2-devel expat-devel pcre-devel git libxslt libxslt-devel libxml2 libxml2-devel openssl openssl-devel curl-devel libjpeg-devel libpng-devel freetype-devel libmcrypt-devel crontabs unzip  ImageMagick-devel
+
+# 创建目录，切换目录
+mkdir -p ${prefix}
+cd ${prefix}
+
+# 下载包
+wget ${nginx_url} -O nginx.tar.gz
+wget ${php_url} -O php.tar.gz
+wget ${mysql_url} -O mysql.rpm
+wget ${redis_url} -O redis.tar.gz
+wget ${redis_ext_url} -O redis_ext.tar.gz
+
+# 创建目录并解压
+rm -rf tmp_nginx tmp_php tmp_redis_ext tmp_redis redis nginx php mysql
+mkdir tmp_nginx tmp_php tmp_redis_ext tmp_redis mysql
+tar -zxvf nginx.tar.gz --strip-components 1 -C tmp_nginx
+tar -zxvf php.tar.gz --strip-components 1 -C tmp_php
+tar -zxvf redis.tar.gz --strip-components 1 -C tmp_redis
+tar -zxvf redis_ext.tar.gz --strip-components 1 -C tmp_redis_ext
+ 
+# 安装Nginx
+cd tmp_nginx
+./configure --prefix=${prefix}/nginx --user=www --group=www --with-http_stub_status_module --with-http_ssl_module
+make 
+make install
+mkdir -p ${prefix}/nginx/conf/conf.d
+sed -i 's/#user  nobody;/user  www;/' ${prefix}/nginx/conf/nginx.conf
+sed -i 's/#gzip  on;/gzip  on;/' ${prefix}/nginx/conf/nginx.conf
+sed -i 's/gzip  on;/&\n\n    include conf.d\/*.conf;/' ${prefix}/nginx/conf/nginx.conf
+
+# 编写启动脚本
+echo -e '#!/bin/sh' > /etc/init.d/nginx
+echo -e '# nginx - this script starts and stops the nginx daemin' >> /etc/init.d/nginx
+echo -e '#' >> /etc/init.d/nginx
+echo -e '# chkconfig:   - 85 15' >> /etc/init.d/nginx
+echo -e '' >> /etc/init.d/nginx
+echo -e '# description:  Nginx is an HTTP(S) server, HTTP(S) reverse \' >> /etc/init.d/nginx
+echo -e '#               proxy and IMAP/POP3 proxy server' >> /etc/init.d/nginx
+echo -e '' >> /etc/init.d/nginx
+echo -e '# Source function library.' >> /etc/init.d/nginx
+echo -e '' >> /etc/init.d/nginx
+echo -e '. /etc/rc.d/init.d/functions' >> /etc/init.d/nginx
+echo -e '' >> /etc/init.d/nginx
+echo -e '# Source networking configuration.' >> /etc/init.d/nginx
+echo -e '' >> /etc/init.d/nginx
+echo -e '. /etc/sysconfig/network' >> /etc/init.d/nginx
+echo -e '' >> /etc/init.d/nginx
+echo -e '# Check that networking is up.' >> /etc/init.d/nginx
+echo -e '' >> /etc/init.d/nginx
+echo -e '[ "$NETWORKING" = "no" ] && exit 0' >> /etc/init.d/nginx
+echo -e '' >> /etc/init.d/nginx
+echo -e "nginx='${prefix}/nginx/sbin/nginx'" >> /etc/init.d/nginx
+echo -e '' >> /etc/init.d/nginx
+echo -e 'prog=$(basename $nginx)' >> /etc/init.d/nginx
+echo -e '' >> /etc/init.d/nginx
+echo -e "NGINX_CONF_FILE='${prefix}/nginx/conf/nginx.conf'" >> /etc/init.d/nginx
+echo -e '' >> /etc/init.d/nginx
+echo -e 'lockfile=/var/lock/subsys/nginx' >> /etc/init.d/nginx
+echo -e '' >> /etc/init.d/nginx
+echo -e 'start() {' >> /etc/init.d/nginx
+echo -e '' >> /etc/init.d/nginx
+echo -e '    [ -x $nginx ] || exit 5' >> /etc/init.d/nginx
+echo -e '' >> /etc/init.d/nginx
+echo -e '    [ -f $NGINX_CONF_FILE ] || exit 6' >> /etc/init.d/nginx
+echo -e '' >> /etc/init.d/nginx
+echo -e '    echo -n $"Starting $prog: "' >> /etc/init.d/nginx
+echo -e '' >> /etc/init.d/nginx
+echo -e '    daemon $nginx -c $NGINX_CONF_FILE' >> /etc/init.d/nginx
+echo -e '' >> /etc/init.d/nginx
+echo -e '    retval=$?' >> /etc/init.d/nginx
+echo -e '' >> /etc/init.d/nginx
+echo -e '    echo' >> /etc/init.d/nginx
+echo -e '' >> /etc/init.d/nginx
+echo -e '    [ $retval -eq 0 ] && touch $lockfile' >> /etc/init.d/nginx
+echo -e '' >> /etc/init.d/nginx
+echo -e '    return $retval' >> /etc/init.d/nginx
+echo -e '' >> /etc/init.d/nginx
+echo -e '}' >> /etc/init.d/nginx
+echo -e '' >> /etc/init.d/nginx
+echo -e '' >> /etc/init.d/nginx
+echo -e 'stop() {' >> /etc/init.d/nginx
+echo -e '' >> /etc/init.d/nginx
+echo -e '    echo -n $"Stopping $prog: "' >> /etc/init.d/nginx
+echo -e '' >> /etc/init.d/nginx
+echo -e '    killproc $prog -QUIT' >> /etc/init.d/nginx
+echo -e '' >> /etc/init.d/nginx
+echo -e '    retval=$?' >> /etc/init.d/nginx
+echo -e '' >> /etc/init.d/nginx
+echo -e '    echo' >> /etc/init.d/nginx
+echo -e '' >> /etc/init.d/nginx
+echo -e '    [ $retval -eq 0 ] && rm -f $lockfile' >> /etc/init.d/nginx
+echo -e '' >> /etc/init.d/nginx
+echo -e '    return $retval' >> /etc/init.d/nginx
+echo -e '' >> /etc/init.d/nginx
+echo -e '}' >> /etc/init.d/nginx
+echo -e '' >> /etc/init.d/nginx
+echo -e '' >> /etc/init.d/nginx
+echo -e '' >> /etc/init.d/nginx
+echo -e 'restart() {' >> /etc/init.d/nginx
+echo -e '' >> /etc/init.d/nginx
+echo -e '    configtest || return $?' >> /etc/init.d/nginx
+echo -e '' >> /etc/init.d/nginx
+echo -e '    stop' >> /etc/init.d/nginx
+echo -e '' >> /etc/init.d/nginx
+echo -e '    start' >> /etc/init.d/nginx
+echo -e '' >> /etc/init.d/nginx
+echo -e '}' >> /etc/init.d/nginx
+echo -e '' >> /etc/init.d/nginx
+echo -e '' >> /etc/init.d/nginx
+echo -e 'reload() {' >> /etc/init.d/nginx
+echo -e '' >> /etc/init.d/nginx
+echo -e '    configtest || return $?' >> /etc/init.d/nginx
+echo -e '' >> /etc/init.d/nginx
+echo -e '    echo -n $"Reloading $prog: "' >> /etc/init.d/nginx
+echo -e '' >> /etc/init.d/nginx
+echo -e '    killproc $nginx -HUP' >> /etc/init.d/nginx
+echo -e '' >> /etc/init.d/nginx
+echo -e '    RETVAL=$?' >> /etc/init.d/nginx
+echo -e '' >> /etc/init.d/nginx
+echo -e '    echo' >> /etc/init.d/nginx
+echo -e '' >> /etc/init.d/nginx
+echo -e '}' >> /etc/init.d/nginx
+echo -e '' >> /etc/init.d/nginx
+echo -e 'force_reload() {' >> /etc/init.d/nginx
+echo -e '' >> /etc/init.d/nginx
+echo -e '    restart' >> /etc/init.d/nginx
+echo -e '' >> /etc/init.d/nginx
+echo -e '}' >> /etc/init.d/nginx
+echo -e '' >> /etc/init.d/nginx
+echo -e '' >> /etc/init.d/nginx
+echo -e 'configtest() {' >> /etc/init.d/nginx
+echo -e '' >> /etc/init.d/nginx
+echo -e '  $nginx -t -c $NGINX_CONF_FILE' >> /etc/init.d/nginx
+echo -e '' >> /etc/init.d/nginx
+echo -e '}' >> /etc/init.d/nginx
+echo -e '' >> /etc/init.d/nginx
+echo -e '' >> /etc/init.d/nginx
+echo -e '' >> /etc/init.d/nginx
+echo -e 'rh_status() {' >> /etc/init.d/nginx
+echo -e '' >> /etc/init.d/nginx
+echo -e '    status $prog' >> /etc/init.d/nginx
+echo -e '' >> /etc/init.d/nginx
+echo -e '}' >> /etc/init.d/nginx
+echo -e '' >> /etc/init.d/nginx
+echo -e '' >> /etc/init.d/nginx
+echo -e 'rh_status_q() {' >> /etc/init.d/nginx
+echo -e '' >> /etc/init.d/nginx
+echo -e '    rh_status >/dev/null 2>&1' >> /etc/init.d/nginx
+echo -e '' >> /etc/init.d/nginx
+echo -e '}' >> /etc/init.d/nginx
+echo -e '' >> /etc/init.d/nginx
+echo -e 'case "$1" in' >> /etc/init.d/nginx
+echo -e '' >> /etc/init.d/nginx
+echo -e '    start)' >> /etc/init.d/nginx
+echo -e '' >> /etc/init.d/nginx
+echo -e '        rh_status_q && exit 0' >> /etc/init.d/nginx
+echo -e '        $1' >> /etc/init.d/nginx
+echo -e '        ;;' >> /etc/init.d/nginx
+echo -e '' >> /etc/init.d/nginx
+echo -e '    stop)' >> /etc/init.d/nginx
+echo -e '' >> /etc/init.d/nginx
+echo -e '' >> /etc/init.d/nginx
+echo -e '        rh_status_q || exit 0' >> /etc/init.d/nginx
+echo -e '        $1' >> /etc/init.d/nginx
+echo -e '        ;;' >> /etc/init.d/nginx
+echo -e '' >> /etc/init.d/nginx
+echo -e '    restart|configtest)' >> /etc/init.d/nginx
+echo -e '        $1' >> /etc/init.d/nginx
+echo -e '        ;;' >> /etc/init.d/nginx
+echo -e '' >> /etc/init.d/nginx
+echo -e '    reload)' >> /etc/init.d/nginx
+echo -e '        rh_status_q || exit 7' >> /etc/init.d/nginx
+echo -e '        $1' >> /etc/init.d/nginx
+echo -e '        ;;' >> /etc/init.d/nginx
+echo -e '' >> /etc/init.d/nginx
+echo -e '' >> /etc/init.d/nginx
+echo -e '    force-reload)' >> /etc/init.d/nginx
+echo -e '        force_reload' >> /etc/init.d/nginx
+echo -e '        ;;' >> /etc/init.d/nginx
+echo -e '    status)' >> /etc/init.d/nginx
+echo -e '        rh_status' >> /etc/init.d/nginx
+echo -e '        ;;' >> /etc/init.d/nginx
+echo -e '' >> /etc/init.d/nginx
+echo -e '' >> /etc/init.d/nginx
+echo -e '    condrestart|try-restart)' >> /etc/init.d/nginx
+echo -e '' >> /etc/init.d/nginx
+echo -e '        rh_status_q || exit 0' >> /etc/init.d/nginx
+echo -e '            ;;' >> /etc/init.d/nginx
+echo -e '' >> /etc/init.d/nginx
+echo -e '    *)' >> /etc/init.d/nginx
+echo -e '' >> /etc/init.d/nginx
+echo -e '        echo $"Usage: $0 {start|stop|status|restart|condrestart|try-restart|reload|force-reload|configtest}"' >> /etc/init.d/nginx
+echo -e '        exit 2' >> /etc/init.d/nginx
+echo -e '' >> /etc/init.d/nginx
+echo -e 'esac' >> /etc/init.d/nginx
+chmod +x /etc/init.d/nginx
+cd ../
+
+
+# 安装redis
+cd tmp_redis
+make 
+make install PREFIX=${prefix}/redis
+# 定义变量 配合启动脚本
+REDISPORT='${REDISPORT}'
+mkdir ${prefix}/redis/conf
+cp ${prefix}/tmp_redis/utils/redis_init_script /etc/init.d/redis
+cp ${prefix}/tmp_redis/redis.conf ${prefix}/redis/conf/6379.conf
+chmod +x /etc/init.d/redis
+
+sed -i 's/daemonize no/daemonize yes/' ${prefix}/redis/conf/6379.conf
+sed -i '2 i# chkconfig: 2345 80 90' /etc/init.d/redis
+sed -i '/^EXEC=/d' /etc/init.d/redis
+sed -i '/^CLIEXEC=/d' /etc/init.d/redis
+sed -i '/^CONF=/d' /etc/init.d/redis
+sed -i "s#REDISPORT=6379#&\n\nEXEC=${prefix}/redis/bin/redis-server#" /etc/init.d/redis
+sed -i "s#REDISPORT=6379#&\n\nCLIEXEC=${prefix}/redis/bin/redis-cli#" /etc/init.d/redis
+sed -i "s#REDISPORT=6379#&\n\nCONF=${prefix}/redis/conf/${REDISPORT}.conf#" /etc/init.d/redis  
+cd ../
+
+# 安装PHP
+cd tmp_php
+./configure --prefix=${prefix}/php \
+	 --with-curl \
+	 --with-freetype-dir \
+	 --with-gd \
+	 --with-gettext \
+	 --with-iconv-dir \
+	 --with-kerberos \
+	 --with-libdir=lib64 \
+	 --with-libxml-dir \
+	 --with-jpeg-dir \
+	 --with-mysqli \
+	 --with-openssl \
+	 --with-pcre-regex \
+	 --with-pdo-mysql \
+	 --with-pdo-sqlite \
+	 --with-pear \
+	 --with-png-dir \
+	 --with-xmlrpc \
+	 --with-xsl \
+	 --with-zlib \
+	 --enable-fpm \
+	 --enable-bcmath \
+	 --enable-libxml \
+	 --enable-inline-optimization \
+	 --enable-mbregex \
+	 --enable-mbstring \
+	 --enable-opcache \
+	 --enable-pcntl \
+	 --enable-shmop \
+	 --enable-soap \
+	 --enable-sockets \
+	 --enable-sysvsem \
+	 --enable-xml \
+	 --enable-zip \
+	 --enable-mysqlnd
+make 
+make install
+
+# 修改PHP-FPM配置
+mv ${prefix}/php/etc/php-fpm.conf.default ${prefix}/php/etc/php-fpm.conf
+mv ${prefix}/php/etc/php-fpm.d/www.conf.default ${prefix}/php/etc/php-fpm.d/www.conf
+sed -i 's/user = nobody/user = www/' ${prefix}/php/etc/php-fpm.d/www.conf
+sed -i 's/user = group/group = www/' ${prefix}/php/etc/php-fpm.d/www.conf
+
+# 编写PHP-FPM启动脚本
+echo -e '#! /bin/sh' > /etc/init.d/php-fpm
+echo -e '### BEGIN INIT INFO' >> /etc/init.d/php-fpm
+echo -e '# Provides:     php-fpm' >> /etc/init.d/php-fpm
+echo -e '# Required-Start:  $remote_fs $network' >> /etc/init.d/php-fpm
+echo -e '# Required-Stop:   $remote_fs $network' >> /etc/init.d/php-fpm
+echo -e '# Default-Start:   2 3 4 5' >> /etc/init.d/php-fpm
+echo -e '# Default-Stop:   0 1 6' >> /etc/init.d/php-fpm
+echo -e '# Short-Description: starts php-fpm' >> /etc/init.d/php-fpm
+echo -e '# Description:    starts the PHP FastCGI Process Manager daemon' >> /etc/init.d/php-fpm
+echo -e '### END INIT INFO' >> /etc/init.d/php-fpm
+echo -e '' >> /etc/init.d/php-fpm
+echo -e "prefix=${prefix}/php" >> /etc/init.d/php-fpm
+echo -e 'exec_prefix=${prefix}' >> /etc/init.d/php-fpm
+echo -e '' >> /etc/init.d/php-fpm
+echo -e 'php_fpm_BIN=${exec_prefix}/sbin/php-fpm' >> /etc/init.d/php-fpm
+echo -e 'php_fpm_CONF=${prefix}/etc/php-fpm.conf' >> /etc/init.d/php-fpm
+echo -e 'php_fpm_PID=${prefix}/var/run/php-fpm.pid' >> /etc/init.d/php-fpm
+echo -e '' >> /etc/init.d/php-fpm
+echo -e 'php_opts="--fpm-config $php_fpm_CONF --pid $php_fpm_PID"' >> /etc/init.d/php-fpm
+echo -e '' >> /etc/init.d/php-fpm
+echo -e 'wait_for_pid () {' >> /etc/init.d/php-fpm
+echo -e '    try=0' >> /etc/init.d/php-fpm
+echo -e '' >> /etc/init.d/php-fpm
+echo -e '    while test $try -lt 35 ; do' >> /etc/init.d/php-fpm
+echo -e '' >> /etc/init.d/php-fpm
+echo -e '        case "$1" in' >> /etc/init.d/php-fpm
+echo -e '            'created')' >> /etc/init.d/php-fpm
+echo -e '            if [ -f "$2" ] ; then' >> /etc/init.d/php-fpm
+echo -e '                try=""' >> /etc/init.d/php-fpm
+echo -e '                break' >> /etc/init.d/php-fpm
+echo -e '            fi' >> /etc/init.d/php-fpm
+echo -e '            ;;' >> /etc/init.d/php-fpm
+echo -e '' >> /etc/init.d/php-fpm
+echo -e '            'removed')' >> /etc/init.d/php-fpm
+echo -e '            if [ ! -f "$2" ] ; then' >> /etc/init.d/php-fpm
+echo -e '                try=""' >> /etc/init.d/php-fpm
+echo -e '                break' >> /etc/init.d/php-fpm
+echo -e '            fi' >> /etc/init.d/php-fpm
+echo -e '            ;;' >> /etc/init.d/php-fpm
+echo -e '        esac' >> /etc/init.d/php-fpm
+echo -e '' >> /etc/init.d/php-fpm
+echo -e '        echo -n .' >> /etc/init.d/php-fpm
+echo -e '        try=`expr $try + 1`' >> /etc/init.d/php-fpm
+echo -e '        sleep 1' >> /etc/init.d/php-fpm
+echo -e '' >> /etc/init.d/php-fpm
+echo -e '    done' >> /etc/init.d/php-fpm
+echo -e '' >> /etc/init.d/php-fpm
+echo -e '}' >> /etc/init.d/php-fpm
+echo -e '' >> /etc/init.d/php-fpm
+echo -e 'case "$1" in' >> /etc/init.d/php-fpm
+echo -e '    start)' >> /etc/init.d/php-fpm
+echo -e '        echo -n "Starting php-fpm "' >> /etc/init.d/php-fpm
+echo -e '' >> /etc/init.d/php-fpm
+echo -e '        $php_fpm_BIN --daemonize $php_opts' >> /etc/init.d/php-fpm
+echo -e '' >> /etc/init.d/php-fpm
+echo -e '        if [ "$?" != 0 ] ; then' >> /etc/init.d/php-fpm
+echo -e '            echo " failed"' >> /etc/init.d/php-fpm
+echo -e '            exit 1' >> /etc/init.d/php-fpm
+echo -e '        fi' >> /etc/init.d/php-fpm
+echo -e '' >> /etc/init.d/php-fpm
+echo -e '        wait_for_pid created $php_fpm_PID' >> /etc/init.d/php-fpm
+echo -e '' >> /etc/init.d/php-fpm
+echo -e '        if [ -n "$try" ] ; then' >> /etc/init.d/php-fpm
+echo -e '            echo " failed"' >> /etc/init.d/php-fpm
+echo -e '            exit 1' >> /etc/init.d/php-fpm
+echo -e '        else' >> /etc/init.d/php-fpm
+echo -e '            echo " done"' >> /etc/init.d/php-fpm
+echo -e '        fi' >> /etc/init.d/php-fpm
+echo -e '    ;;' >> /etc/init.d/php-fpm
+echo -e '' >> /etc/init.d/php-fpm
+echo -e '    stop)' >> /etc/init.d/php-fpm
+echo -e '        echo -n "Gracefully shutting down php-fpm "' >> /etc/init.d/php-fpm
+echo -e '' >> /etc/init.d/php-fpm
+echo -e '        if [ ! -r $php_fpm_PID ] ; then' >> /etc/init.d/php-fpm
+echo -e '            echo "warning, no pid file found - php-fpm is not running ?"' >> /etc/init.d/php-fpm
+echo -e '            exit 1' >> /etc/init.d/php-fpm
+echo -e '        fi' >> /etc/init.d/php-fpm
+echo -e '' >> /etc/init.d/php-fpm
+echo -e '        kill -QUIT `cat $php_fpm_PID`' >> /etc/init.d/php-fpm
+echo -e '' >> /etc/init.d/php-fpm
+echo -e '        wait_for_pid removed $php_fpm_PID' >> /etc/init.d/php-fpm
+echo -e '' >> /etc/init.d/php-fpm
+echo -e '        if [ -n "$try" ] ; then' >> /etc/init.d/php-fpm
+echo -e '            echo " failed. Use force-quit"' >> /etc/init.d/php-fpm
+echo -e '            exit 1' >> /etc/init.d/php-fpm
+echo -e '        else' >> /etc/init.d/php-fpm
+echo -e '            echo " done"' >> /etc/init.d/php-fpm
+echo -e '        fi' >> /etc/init.d/php-fpm
+echo -e '    ;;' >> /etc/init.d/php-fpm
+echo -e '' >> /etc/init.d/php-fpm
+echo -e '    force-quit)' >> /etc/init.d/php-fpm
+echo -e '        echo -n "Terminating php-fpm "' >> /etc/init.d/php-fpm
+echo -e '' >> /etc/init.d/php-fpm
+echo -e '        if [ ! -r $php_fpm_PID ] ; then' >> /etc/init.d/php-fpm
+echo -e '            echo "warning, no pid file found - php-fpm is not running ?"' >> /etc/init.d/php-fpm
+echo -e '            exit 1' >> /etc/init.d/php-fpm
+echo -e '        fi' >> /etc/init.d/php-fpm
+echo -e '' >> /etc/init.d/php-fpm
+echo -e '        kill -TERM `cat $php_fpm_PID`' >> /etc/init.d/php-fpm
+echo -e '' >> /etc/init.d/php-fpm
+echo -e '        wait_for_pid removed $php_fpm_PID' >> /etc/init.d/php-fpm
+echo -e '' >> /etc/init.d/php-fpm
+echo -e '        if [ -n "$try" ] ; then' >> /etc/init.d/php-fpm
+echo -e '            echo " failed"' >> /etc/init.d/php-fpm
+echo -e '            exit 1' >> /etc/init.d/php-fpm
+echo -e '        else' >> /etc/init.d/php-fpm
+echo -e '            echo " done"' >> /etc/init.d/php-fpm
+echo -e '        fi' >> /etc/init.d/php-fpm
+echo -e '    ;;' >> /etc/init.d/php-fpm
+echo -e '' >> /etc/init.d/php-fpm
+echo -e '    restart)' >> /etc/init.d/php-fpm
+echo -e '        $0 stop' >> /etc/init.d/php-fpm
+echo -e '        $0 start' >> /etc/init.d/php-fpm
+echo -e '    ;;' >> /etc/init.d/php-fpm
+echo -e '' >> /etc/init.d/php-fpm
+echo -e '    reload)' >> /etc/init.d/php-fpm
+echo -e '' >> /etc/init.d/php-fpm
+echo -e '        echo -n "Reload service php-fpm "' >> /etc/init.d/php-fpm
+echo -e '' >> /etc/init.d/php-fpm
+echo -e '        if [ ! -r $php_fpm_PID ] ; then' >> /etc/init.d/php-fpm
+echo -e '            echo "warning, no pid file found - php-fpm is not running ?"' >> /etc/init.d/php-fpm
+echo -e '            exit 1' >> /etc/init.d/php-fpm
+echo -e '        fi' >> /etc/init.d/php-fpm
+echo -e '' >> /etc/init.d/php-fpm
+echo -e '        kill -USR2 `cat $php_fpm_PID`' >> /etc/init.d/php-fpm
+echo -e '' >> /etc/init.d/php-fpm
+echo -e '        echo " done"' >> /etc/init.d/php-fpm
+echo -e '    ;;' >> /etc/init.d/php-fpm
+echo -e '' >> /etc/init.d/php-fpm
+echo -e '    *)' >> /etc/init.d/php-fpm
+echo -e '        echo "Usage: $0 {start|stop|force-quit|restart|reload}"' >> /etc/init.d/php-fpm
+echo -e '        exit 1' >> /etc/init.d/php-fpm
+echo -e '    ;;' >> /etc/init.d/php-fpm
+echo -e '' >> /etc/init.d/php-fpm
+echo -e 'esac' >> /etc/init.d/php-fpm
+chmod +x /etc/init.d/php-fpm
+cd ../
+
+# 编译PHP-REDIS拓展
+cd tmp_redis_ext
+${prefix}/php/bin/phpize
+./configure --with-php-config=${prefix}/php/bin/php-config
+make
+make install
+
+# 添加php.ini
+echo -e 'extension=redis.so' > ${prefix}/php/lib/php.ini
+cd ../
+
+# Yum安装MYSQL
+yum localinstall -y mysql.rpm
+yum install -y mysql-community-server
+mysqld --basedir=${prefix}/mysql --datadir=${prefix}/mysql/data --user=mysql --initialize-insecure
+
+# 编写MYSQL配置文件
+echo -e '[client]' > /etc/my.cnf
+echo -e 'port=3306' >> /etc/my.cnf
+echo -e '' >> /etc/my.cnf
+echo -e '[mysql]' >> /etc/my.cnf
+echo -e 'no-beep' >> /etc/my.cnf
+echo -e 'default-character-set=utf8mb4' >> /etc/my.cnf
+echo -e '' >> /etc/my.cnf
+echo -e '[mysqld]' >> /etc/my.cnf
+echo -e '# log-bin' >> /etc/my.cnf
+echo -e '# shared-memory' >> /etc/my.cnf
+echo -e '# skip-networking' >> /etc/my.cnf
+echo -e '# enable-named-pipe' >> /etc/my.cnf
+echo -e '# socket=mysql=MYSQL' >> /etc/my.cnf
+echo -e '# shared-memory-base-name=MYSQL' >> /etc/my.cnf
+echo -e '' >> /etc/my.cnf
+echo -e 'default_authentication_plugin=mysql_native_password' >> /etc/my.cnf
+echo -e '' >> /etc/my.cnf
+echo -e "datadir='${prefix}/mysql/data'" >> /etc/my.cnf
+echo -e "basedir='${prefix}/mysql'" >> /etc/my.cnf
+echo -e '' >> /etc/my.cnf
+echo -e 'port=3306' >> /etc/my.cnf
+echo -e 'server-id=1' >> /etc/my.cnf
+echo -e '' >> /etc/my.cnf
+echo -e 'tmp_table_size=16M' >> /etc/my.cnf
+echo -e 'max_connections=200' >> /etc/my.cnf
+echo -e 'thread_cache_size=10' >> /etc/my.cnf
+echo -e 'table_open_cache=4096' >> /etc/my.cnf
+echo -e '' >> /etc/my.cnf
+echo -e 'character-set-server=utf8mb4' >> /etc/my.cnf
+echo -e 'default-storage-engine=INNODB' >> /etc/my.cnf
+echo -e '' >> /etc/my.cnf
+echo -e 'wait_timeout=2880000' >> /etc/my.cnf
+echo -e 'interactive_timeout = 2880000' >> /etc/my.cnf
+echo -e '' >> /etc/my.cnf
+echo -e 'sql-mode="STRICT_TRANS_TABLES,NO_ENGINE_SUBSTITUTION"' >> /etc/my.cnf
+echo -e '' >> /etc/my.cnf
+echo -e '### MyISAM Specific options ###' >> /etc/my.cnf
+echo -e '' >> /etc/my.cnf
+echo -e 'key_buffer_size=8M' >> /etc/my.cnf
+echo -e 'read_buffer_size=4M' >> /etc/my.cnf
+echo -e 'read_rnd_buffer_size=2M' >> /etc/my.cnf
+echo -e 'myisam_sort_buffer_size=8M' >> /etc/my.cnf
+echo -e 'myisam_max_sort_file_size=100G' >> /etc/my.cnf
+echo -e '' >> /etc/my.cnf
+echo -e '### INNODB Specific options ###' >> /etc/my.cnf
+echo -e '' >> /etc/my.cnf
+echo -e '# skip-innodb' >> /etc/my.cnf
+echo -e '# innodb_data_home_dir=' >> /etc/my.cnf
+echo -e '' >> /etc/my.cnf
+echo -e 'back_log=80' >> /etc/my.cnf
+echo -e 'flush_time=0' >> /etc/my.cnf
+echo -e '' >> /etc/my.cnf
+echo -e 'sync_relay_log=10000' >> /etc/my.cnf
+echo -e 'sync_master_info=10000' >> /etc/my.cnf
+echo -e 'sync_relay_log_info=10000' >> /etc/my.cnf
+echo -e '' >> /etc/my.cnf
+echo -e 'max_allowed_packet=100M' >> /etc/my.cnf
+echo -e 'sort_buffer_size=256K' >> /etc/my.cnf
+echo -e 'join_buffer_size=256K' >> /etc/my.cnf
+echo -e 'open_files_limit=4096' >> /etc/my.cnf
+echo -e 'max_connect_errors=100' >> /etc/my.cnf
+echo -e 'table_definition_cache=2048' >> /etc/my.cnf
+echo -e 'binlog_row_event_max_size=8K' >> /etc/my.cnf
+echo -e '' >> /etc/my.cnf
+echo -e 'innodb_open_files=300' >> /etc/my.cnf
+echo -e 'innodb_file_per_table=1' >> /etc/my.cnf
+echo -e 'innodb_log_file_size=48M' >> /etc/my.cnf
+echo -e 'innodb_log_buffer_size=1M' >> /etc/my.cnf
+echo -e 'innodb_buffer_pool_size=8M' >> /etc/my.cnf
+echo -e 'innodb_stats_on_metadata=0' >> /etc/my.cnf
+echo -e 'innodb_checksum_algorithm=0' >> /etc/my.cnf
+echo -e 'innodb_thread_concurrency=8' >> /etc/my.cnf
+echo -e 'innodb_old_blocks_time=1000' >> /etc/my.cnf
+echo -e 'innodb_autoextend_increment=64' >> /etc/my.cnf
+echo -e 'innodb_buffer_pool_instances=8' >> /etc/my.cnf
+echo -e 'innodb_concurrency_tickets=5000' >> /etc/my.cnf
+echo -e 'innodb_flush_log_at_trx_commit=1' >> /etc/my.cnf
+echo -e '' >> /etc/my.cnf
+echo -e '### Plugin Specific options ###' >> /etc/my.cnf
+echo -e '# plugin_load="mysqlx"' >> /etc/my.cnf
+echo -e '# loose_mysqlx_port=33060' >> /etc/my.cnf
+
+# 加入系统服务
+chkconfig --add nginx
+chkconfig --add redis
+chkconfig --add php-fpm
+
+# 启动服务
+service nginx start
+service redis start
+service php-fpm start
+service mysqld start
+
+# 删除临时目录和包
+rm -rf tmp_nginx tmp_php tmp_redis_ext tmp_redis nginx.tar.gz redis.tar.gz redis_ext.tar.gz php.tar.gz mysql.rpm
+
+# 设置系统环境变量
+PATH='$PATH'
+echo -e "\n\nPATH=${PATH}:${prefix}/redis/bin:${prefix}/php/bin" >> /etc/profile
+
+# 成功提示
+echo -e "\033[32m Successful completion! \033[0m"
+echo -e "\033[32m MYSQL: ${prefix}/mysql \033[0m"
+echo -e "\033[32m REDIS: ${prefix}/redis \033[0m"
+echo -e "\033[32m NGINX: ${prefix}/nginx \033[0m"
+echo -e "\033[32m PHP: ${prefix}/php \033[0m"
