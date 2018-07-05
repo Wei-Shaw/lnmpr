@@ -46,7 +46,31 @@ tar -zxvf redis_ext.tar.gz --strip-components 1 -C tmp_redis_ext
  
 # 安装Nginx
 cd tmp_nginx
-./configure --prefix=${prefix}/nginx --user=www --group=www --with-http_stub_status_module --with-http_ssl_module
+./configure \
+	--prefix=${prefix}/nginx \
+	--user=www \
+	--group=www \
+	--with-http_ssl_module \
+	--with-http_realip_module \
+	--with-http_addition_module \
+	--with-http_sub_module \
+	--with-http_dav_module \
+	--with-http_flv_module \
+	--with-http_mp4_module \
+	--with-http_gunzip_module \
+	--with-http_gzip_static_module \
+	--with-http_random_index_module \
+	--with-http_secure_link_module \
+	--with-http_stub_status_module \
+	--with-http_auth_request_module \
+	--with-threads \
+	--with-stream \
+	--with-stream_ssl_module \
+	--with-http_slice_module \
+	--with-mail \
+	--with-mail_ssl_module \
+	--with-file-aio \
+	--with-http_v2_module
 make 
 make install
 mkdir -p ${prefix}/nginx/conf/conf.d
@@ -222,11 +246,11 @@ echo -e 'esac' >> /etc/init.d/nginx
 chmod +x /etc/init.d/nginx
 cd ../
 
-
 # 安装redis
 cd tmp_redis
 make 
 make install PREFIX=${prefix}/redis
+
 # 定义变量 配合启动脚本
 REDISPORT='${REDISPORT}'
 mkdir ${prefix}/redis/conf
@@ -284,7 +308,8 @@ cd tmp_php
 make 
 make install
 
-# 修改PHP-FPM配置
+# 复制配置文件、修改PHP-FPM配置
+cp php.ini-production ${prefix}/php/lib/php.ini
 mv ${prefix}/php/etc/php-fpm.conf.default ${prefix}/php/etc/php-fpm.conf
 mv ${prefix}/php/etc/php-fpm.d/www.conf.default ${prefix}/php/etc/php-fpm.d/www.conf
 sed -i 's/user = nobody/user = www/' ${prefix}/php/etc/php-fpm.d/www.conf
@@ -436,8 +461,8 @@ ${prefix}/php/bin/phpize
 make
 make install
 
-# 添加php.ini
-echo -e 'extension=redis.so' > ${prefix}/php/lib/php.ini
+# 修改php.ini
+echo -e '\nextension=redis.so' >> ${prefix}/php/lib/php.ini
 cd ../
 
 # Yum安装MYSQL
