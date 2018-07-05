@@ -11,3 +11,5 @@ chmod +x lnmpr
 ./lnmpr
 
 ```
+
+### 欢淫star、issues	:kissing_heart:
