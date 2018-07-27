@@ -11,7 +11,7 @@
 
 # 包地址,Mysql为RPM源
 nginx_url='http://nginx.org/download/nginx-1.15.0.tar.gz'
-php_url='http://br2.php.net/get/php-7.2.7.tar.gz/from/this/mirror'
+php_url='http://cn2.php.net/get/php-7.2.8.tar.bz2/from/this/mirror'
 mysql_url='https://dev.mysql.com/get/mysql80-community-release-el7-1.noarch.rpm'
 redis_url='https://github.com/antirez/redis/archive/5.0-rc3.tar.gz'
 redis_ext_url='https://pecl.php.net/get/redis-4.1.0RC3.tgz'
